@@ -46,8 +46,6 @@
 #define KEY_SIG_AOS     "SIGNAL_AOS"
 #define KEY_SIG_LOS     "SIGNAL_LOS"
 
-#define DEFAULT_CYCLE_MS    1000
-
 /**
  * \brief Read radio configuration.
  * \param conf Pointer to a radio_conf_t structure where the data will be
@@ -134,7 +132,7 @@ gboolean radio_conf_read(radio_conf_t * conf)
     }
     else
     {
-        conf->cycle = DEFAULT_CYCLE_MS;
+        conf->cycle = DEFAULT_RIG_CYCLE_MS;
     }
 
     /* KEY_LO is optional */
@@ -275,7 +273,7 @@ void radio_conf_save(radio_conf_t * conf)
     g_key_file_set_integer(cfg, GROUP, KEY_TYPE, conf->type);
     g_key_file_set_integer(cfg, GROUP, KEY_PTT, conf->ptt);
 
-    if (conf->cycle == DEFAULT_CYCLE_MS)
+    if (conf->cycle == DEFAULT_RIG_CYCLE_MS)
         g_key_file_remove_key(cfg, GROUP, KEY_CYCLE, NULL);
     else
         g_key_file_set_integer(cfg, GROUP, KEY_CYCLE, conf->cycle);

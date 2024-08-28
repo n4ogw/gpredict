@@ -52,12 +52,14 @@ static void add_cb(GtkWidget * button, gpointer data)
         .name = NULL,
         .host = NULL,
         .port = 4533,
+	.cycle = DEFAULT_ROT_CYCLE_MS,
         .minaz = 0,
         .maxaz = 360,
         .minel = 0,
         .maxel = 90,
         .aztype = ROT_AZ_TYPE_360,
         .azstoppos = 0,
+	.threshold = DEFAULT_THLD_DEG,
     };
 
     /* run rot conf editor */
@@ -569,12 +571,14 @@ void sat_pref_rot_ok()
         .name = NULL,
         .host = NULL,
         .port = 4533,
+	.cycle = DEFAULT_ROT_CYCLE_MS,
         .minaz = 0,
         .maxaz = 360,
         .minel = 0,
         .maxel = 90,
         .aztype = ROT_AZ_TYPE_360,
         .azstoppos = 0,
+	.threshold = DEFAULT_THLD_DEG,
     };
 
 

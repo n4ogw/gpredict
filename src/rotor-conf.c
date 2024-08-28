@@ -46,9 +46,6 @@
 #define KEY_AZSTOPPOS   "AzStopPos"
 #define KEY_THLD        "Threshold"
 
-#define DEFAULT_CYCLE_MS    1000
-#define DEFAULT_THLD_DEG    5.0
-
 /**
  * \brief Read rotator configuration.
  * \param conf Pointer to a rotor_conf_t structure where the data will be
@@ -132,7 +129,7 @@ gboolean rotor_conf_read(rotor_conf_t * conf)
     }
     else
     {
-        conf->cycle = DEFAULT_CYCLE_MS;
+        conf->cycle = DEFAULT_ROT_CYCLE_MS;
     }
 
     if (g_key_file_has_key(cfg, GROUP, KEY_THLD, NULL))
@@ -250,7 +247,7 @@ void rotor_conf_save(rotor_conf_t * conf)
     g_key_file_set_double(cfg, GROUP, KEY_MAXEL, conf->maxel);
     g_key_file_set_double(cfg, GROUP, KEY_AZSTOPPOS, conf->azstoppos);
 
-    if (conf->cycle == DEFAULT_CYCLE_MS)
+    if (conf->cycle == DEFAULT_ROT_CYCLE_MS)
         g_key_file_remove_key(cfg, GROUP, KEY_CYCLE, NULL);
     else
         g_key_file_set_integer(cfg, GROUP, KEY_CYCLE, conf->cycle);

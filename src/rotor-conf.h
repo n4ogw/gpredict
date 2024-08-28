@@ -53,6 +53,8 @@ typedef struct {
     gdouble         threshold;  /*!< Angle difference that triggers new motion command */
 } rotor_conf_t;
 
+#define DEFAULT_ROT_CYCLE_MS    1000
+#define DEFAULT_THLD_DEG    5.0
 
 gboolean        rotor_conf_read(rotor_conf_t * conf);
 void            rotor_conf_save(rotor_conf_t * conf);

@@ -76,6 +76,7 @@ typedef struct {
     gint            vfo_opt;    /*!< Keep track of vfo_opt being enabled in rigctld */
 } radio_conf_t;
 
+#define DEFAULT_RIG_CYCLE_MS    1000
 
 gboolean        radio_conf_read(radio_conf_t * conf);
 void            radio_conf_save(radio_conf_t * conf);

@@ -169,7 +169,7 @@ static void gtk_rig_ctrl_init(GtkRigCtrl * ctrl,
     ctrl->sock2 = 0;
     g_mutex_init(&(ctrl->busy));
     ctrl->engaged = FALSE;
-    ctrl->delay = 1000;
+    ctrl->delay = DEFAULT_RIG_CYCLE_MS;
     ctrl->timerid = 0;
     ctrl->errcnt = 0;
     ctrl->lastrxptt = FALSE;
@@ -1327,7 +1327,7 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
     g_object_set(label, "xalign", 1.0f, "yalign", 0.5f, NULL);
     gtk_grid_attach(GTK_GRID(table), label, 0, 3, 1, 1);
 
-    ctrl->cycle_spin = gtk_spin_button_new_with_range(10, 10000, 10);
+    ctrl->cycle_spin = gtk_spin_button_new_with_range(100, 10000, 10);
     gtk_spin_button_set_digits(GTK_SPIN_BUTTON(ctrl->cycle_spin), 0);
     gtk_widget_set_tooltip_text(ctrl->cycle_spin,
                                 _("This parameter controls the delay between "
