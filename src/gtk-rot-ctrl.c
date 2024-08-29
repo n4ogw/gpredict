@@ -1265,11 +1265,11 @@ static GtkWidget *create_target_widgets(GtkRotCtrl * ctrl)
     guint           i, n;
     sat_t          *sat = NULL;
     gchar          *lastSat;
-    gint            lastSatNum;    
+    gint            lastSatNum;
 
     lastSat = sat_cfg_get_str(SAT_CFG_STR_LAST_SAT);
     lastSatNum = 0;
-    
+
     buff = g_strdup_printf(FMTSTR, 0.0);
     table = gtk_grid_new();
     gtk_container_set_border_width(GTK_CONTAINER(table), 5);
@@ -1284,13 +1284,14 @@ static GtkWidget *create_target_widgets(GtkRotCtrl * ctrl)
     for (i = 0; i < n; i++)
     {
         sat = SAT(g_slist_nth_data(ctrl->sats, i));
-        if (sat)
+        if (sat) {
             gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ctrl->SatSel),
                                            sat->nickname);
-	if (lastSat) {
-	  if (!strcmp(lastSat, sat->nickname)) {
-	    lastSatNum = i;
+	    if (lastSat) {
+	      if (!strcmp(lastSat, sat->nickname)) {
+		lastSatNum = i;
 	      }
+	    }
 	}
     }
     gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->SatSel), lastSatNum);
@@ -1299,6 +1300,9 @@ static GtkWidget *create_target_widgets(GtkRotCtrl * ctrl)
                      ctrl);
     gtk_grid_attach(GTK_GRID(table), ctrl->SatSel, 0, 0, 2, 1);
 
+    /* force update of pass info */
+    sat_selected_cb(GTK_COMBO_BOX(ctrl->SatSel), ctrl);
+    
     /* tracking button */
     ctrl->track = gtk_toggle_button_new_with_label(_("Track"));
     gtk_widget_set_tooltip_text(ctrl->track,
