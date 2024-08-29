@@ -56,7 +56,7 @@
 #include "gtk-rot-ctrl.h"
 #include "predict-tools.h"
 #include "sat-log.h"
-
+#include "sat-cfg.h"
 
 #define FMTSTR "%7.2f\302\260"
 #define MAX_ERROR_COUNT 5
@@ -1080,6 +1080,7 @@ static void rot_selected_cb(GtkComboBox * box, gpointer data)
         sat_log_log(SAT_LOG_LEVEL_ERROR,
                     _("%s:%d: Failed to allocate memory for rotator config"),
                     __FILE__, __LINE__);
+	sat_cfg_set_str(SAT_CFG_STR_LAST_ROT, NULL);
         return;
     }
 
@@ -1105,6 +1106,8 @@ static void rot_selected_cb(GtkComboBox * box, gpointer data)
 
         /* Update flipped when changing rotor if there is a plot */
         set_flipped_pass(ctrl);
+
+	sat_cfg_set_str(SAT_CFG_STR_LAST_ROT, ctrl->conf->name);
     }
     else
     {
@@ -1117,6 +1120,7 @@ static void rot_selected_cb(GtkComboBox * box, gpointer data)
             g_free(ctrl->conf->host);
         g_free(ctrl->conf);
         ctrl->conf = NULL;
+	sat_cfg_set_str(SAT_CFG_STR_LAST_ROT, NULL);
     }
 }
 
@@ -1260,9 +1264,13 @@ static GtkWidget *create_target_widgets(GtkRotCtrl * ctrl)
     gchar          *buff;
     guint           i, n;
     sat_t          *sat = NULL;
+    gchar          *lastSat;
+    gint            lastSatNum;    
 
+    lastSat = sat_cfg_get_str(SAT_CFG_STR_LAST_SAT);
+    lastSatNum = 0;
+    
     buff = g_strdup_printf(FMTSTR, 0.0);
-
     table = gtk_grid_new();
     gtk_container_set_border_width(GTK_CONTAINER(table), 5);
     gtk_grid_set_column_homogeneous(GTK_GRID(table), FALSE);
@@ -1279,8 +1287,13 @@ static GtkWidget *create_target_widgets(GtkRotCtrl * ctrl)
         if (sat)
             gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ctrl->SatSel),
                                            sat->nickname);
+	if (lastSat) {
+	  if (!strcmp(lastSat, sat->nickname)) {
+	    lastSatNum = i;
+	      }
+	}
     }
-    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->SatSel), 0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->SatSel), lastSatNum);
     gtk_widget_set_tooltip_text(ctrl->SatSel, _("Select target object"));
     g_signal_connect(ctrl->SatSel, "changed", G_CALLBACK(sat_selected_cb),
                      ctrl);
@@ -1338,7 +1351,12 @@ static GtkWidget *create_conf_widgets(GtkRotCtrl * ctrl)
     gchar         **vbuff;
     const gchar    *filename;   /* file name */
     gchar          *rotname;
+    gchar          *lastRot;
+    gint            lastRotNum;
 
+    lastRot = sat_cfg_get_str(SAT_CFG_STR_LAST_ROT);
+    lastRotNum = 0;
+    
     table = gtk_grid_new();
     gtk_container_set_border_width(GTK_CONTAINER(table), 5);
     gtk_grid_set_column_spacing(GTK_GRID(table), 5);
@@ -1382,6 +1400,11 @@ static GtkWidget *create_conf_widgets(GtkRotCtrl * ctrl)
             {
                 gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT
                                                (ctrl->DevSel), rotname);
+		if (lastRot) {
+		  if (!strcmp(lastRot, rotname)) {
+		    lastRotNum = i;
+		  }
+		}
                 g_free(rotname);
             }
         }
@@ -1394,11 +1417,11 @@ static GtkWidget *create_conf_widgets(GtkRotCtrl * ctrl)
                     __FILE__, __LINE__, error->message);
         g_clear_error(&error);
     }
-
+    g_free(lastRot);
     g_free(dirname);
     g_dir_close(dir);
 
-    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel), 0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel), lastRotNum);
     g_signal_connect(ctrl->DevSel, "changed", G_CALLBACK(rot_selected_cb),
                      ctrl);
     gtk_grid_attach(GTK_GRID(table), ctrl->DevSel, 1, 0, 1, 1);

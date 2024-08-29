@@ -129,6 +129,7 @@ typedef enum {
     SAT_CFG_INT_TLE_LAST_UPDATE,        /*!< Date and time of last update, Unix seconds. */
     SAT_CFG_INT_LOG_CLEAN_AGE,  /*!< Age of log file to delete (seconds) */
     SAT_CFG_INT_LOG_LEVEL,      /*!< Logging level */
+    SAT_CFG_INT_LAST_TRSP,      /*!< Last used transponder */
     SAT_CFG_INT_NUM             /*!< Number of integer parameters. */
 } sat_cfg_int_e;
 
@@ -152,6 +153,10 @@ typedef enum {
     SAT_CFG_STR_TLE_URLS,       /*!< ; separated list of TLE file URLs (since 1.4) */
     SAT_CFG_STR_TLE_FILE_DIR,   /*!< Local directory from which tle were last updated. */
     SAT_CFG_STR_PRED_SAVE_DIR,  /*!< Last used save directory for pass predictions */
+    SAT_CFG_STR_LAST_RADIO1,    /*!< Last used radio 1 */
+    SAT_CFG_STR_LAST_RADIO2,    /*!< Last used radio 2 */
+    SAT_CFG_STR_LAST_SAT,       /*!< Last used satellite */
+    SAT_CFG_STR_LAST_ROT,       /*!< Last used rotator */
     SAT_CFG_STR_NUM             /*!< Number of string parameters */
 } sat_cfg_str_e;
 

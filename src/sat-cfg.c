@@ -207,7 +207,8 @@ sat_cfg_int_t   sat_cfg_int[SAT_CFG_INT_NUM] = {
     {"TLE", "AUTO_UPDATE_ACTION", 1},   /* notify, see tle_auto_upd_action_t */
     {"TLE", "LAST_UPDATE", 0},
     {"LOG", "CLEAN_AGE", 0},    /* 0 = Never clean */
-    {"LOG", "LEVEL", 2}
+    {"LOG", "LEVEL", 2},
+    {"GLOBAL", "LAST_TRSP", 0}
 };
 
 /** Array containing the string configuration values */
@@ -243,7 +244,11 @@ sat_cfg_str_t   sat_cfg_str[SAT_CFG_STR_NUM] = {
      "https://celestrak.org/NORAD/elements/visual.txt;"
      "https://celestrak.org/NORAD/elements/weather.txt"},
     {"TLE", "FILE_DIR", NULL},
-    {"PREDICT", "SAVE_DIR", NULL}
+    {"PREDICT", "SAVE_DIR", NULL},
+    {"GLOBAL", "LAST_RADIO1", NULL},
+    {"GLOBAL", "LAST_RADIO2", NULL},
+    {"GLOBAL", "LAST_SAT", NULL},
+    {"GLOBAL", "LAST_ROT", NULL}
 };
 
 /* The configuration data buffer */

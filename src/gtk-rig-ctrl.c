@@ -671,6 +671,8 @@ static void sat_selected_cb(GtkComboBox * satsel, gpointer data)
             free_pass(ctrl->pass);
         ctrl->pass = get_next_pass(ctrl->target, ctrl->qth, 3.0);
 
+	sat_cfg_set_str(SAT_CFG_STR_LAST_SAT, ctrl->target->nickname);
+
         /* read transponders for new target */
         load_trsp_list(ctrl);
     }
@@ -751,17 +753,20 @@ static void trsp_selected_cb(GtkComboBox * box, gpointer data)
     {
         /* clear transponder data */
         ctrl->trsp = NULL;
+	sat_cfg_set_int(SAT_CFG_INT_LAST_TRSP, 0);
     }
     else if (i < n)
     {
         ctrl->trsp = (trsp_t *) g_slist_nth_data(ctrl->trsplist, i);
         trsp_tune_cb(NULL, data);
+	sat_cfg_set_int(SAT_CFG_INT_LAST_TRSP, i);
     }
     else
     {
         sat_log_log(SAT_LOG_LEVEL_ERROR,
                     _("%s: Inconsistency detected in internal transponder "
                       "data (%d,%d)"), __func__, i, n);
+	sat_cfg_set_int(SAT_CFG_INT_LAST_TRSP, 0);
     }
 }
 
@@ -833,6 +838,7 @@ static void primary_rig_selected_cb(GtkComboBox * box, gpointer data)
         sat_log_log(SAT_LOG_LEVEL_ERROR,
                     _("%s:%d: Failed to allocate memory for radio config"),
                     __FILE__, __LINE__);
+	sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO1, NULL);
         return;
     }
 
@@ -871,6 +877,7 @@ static void primary_rig_selected_cb(GtkComboBox * box, gpointer data)
         g_free(ctrl->conf);
         ctrl->conf = NULL;
     }
+    if (ctrl->conf != NULL) sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO1, ctrl->conf->name);
 }
 
 static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
@@ -895,7 +902,8 @@ static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
     if (gtk_combo_box_get_active(box) == 0)
     {
         /* first entry is "None" */
-
+        sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO2, NULL);
+      
         /* reset uplink LO to what's in ctrl->conf */
         if (ctrl->conf != NULL)
         {
@@ -924,7 +932,7 @@ static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
             g_free(buff);
         }
         gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel2), 0);
-
+	sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO2, NULL);
         return;
     }
 
@@ -938,6 +946,7 @@ static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
         sat_log_log(SAT_LOG_LEVEL_ERROR,
                     _("%s:%s: Failed to allocate memory for radio config"),
                     __FILE__, __func__);
+	sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO2, NULL);
         return;
     }
 
@@ -966,6 +975,7 @@ static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
         g_free(ctrl->conf2);
         ctrl->conf2 = NULL;
     }
+    if (ctrl->conf2 != NULL) sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO2, ctrl->conf2->name);
 }
 
 static void rig_engaged_cb(GtkToggleButton * button, gpointer data)
@@ -1012,6 +1022,10 @@ static GtkWidget *create_target_widgets(GtkRigCtrl * ctrl)
     gchar          *buff;
     guint           i, n;
     sat_t          *sat = NULL;
+    gchar          *lastSat;
+    gint            lastSatNum;
+    gint            lastTrsp;
+    gint            nTrsp;
 
     buff = g_strdup_printf(AZEL_FMTSTR, 0.0);
 
@@ -1021,17 +1035,28 @@ static GtkWidget *create_target_widgets(GtkRigCtrl * ctrl)
     gtk_grid_set_row_spacing(GTK_GRID(table), 5);
 
     /* sat selector */
+    lastSat = sat_cfg_get_str(SAT_CFG_STR_LAST_SAT);
+    lastSatNum = 0;
+    lastTrsp = sat_cfg_get_int(SAT_CFG_INT_LAST_TRSP);
+
     ctrl->SatSel = gtk_combo_box_text_new();
     n = g_slist_length(ctrl->sats);
     for (i = 0; i < n; i++)
     {
         sat = SAT(g_slist_nth_data(ctrl->sats, i));
-        if (sat)
+        if (sat) {
             gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ctrl->SatSel),
                                            sat->nickname);
+	    if (lastSat) {
+	      if (!strcmp(lastSat,sat->nickname)) {
+		lastSatNum = i;
+	      }
+	    }
+	}
     }
-
-    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->SatSel), 0);
+    g_free(lastSat);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->SatSel), lastSatNum);
+    
     gtk_widget_set_tooltip_text(ctrl->SatSel, _("Select target object"));
     g_signal_connect(ctrl->SatSel, "changed", G_CALLBACK(sat_selected_cb),
                      ctrl);
@@ -1053,6 +1078,23 @@ static GtkWidget *create_target_widgets(GtkRigCtrl * ctrl)
     g_signal_connect(ctrl->TrspSel, "changed", G_CALLBACK(trsp_selected_cb),
                      ctrl);
     gtk_grid_attach(GTK_GRID(table), ctrl->TrspSel, 0, 1, 3, 1);
+
+    /* force update of transponder list and pass */
+    sat_selected_cb(GTK_COMBO_BOX(ctrl->SatSel), ctrl);
+        
+    if (ctrl->trsp != NULL)
+      {
+	nTrsp = g_slist_length(ctrl->trsplist);
+
+	if (lastTrsp < nTrsp) {
+	  gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->TrspSel), lastTrsp);
+	}
+      }
+    else
+      {
+
+      }
+    
 
     /* buttons */
     tune = gtk_button_new_with_label(_("T"));
@@ -1197,12 +1239,20 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
     gchar         **vbuff;
     const gchar    *filename;   /* file name */
     gchar          *rigname;
-
+    gchar          *lastrig1name;
+    gint           lastrig1num;
+    gchar          *lastrig2name;
+    gint           lastrig2num;
 
     table = gtk_grid_new();
     gtk_container_set_border_width(GTK_CONTAINER(table), 5);
     gtk_grid_set_column_spacing(GTK_GRID(table), 5);
     gtk_grid_set_row_spacing(GTK_GRID(table), 5);
+
+    lastrig1name = sat_cfg_get_str(SAT_CFG_STR_LAST_RADIO1);
+    lastrig1num = 0;
+    lastrig2name = sat_cfg_get_str(SAT_CFG_STR_LAST_RADIO2);
+    lastrig2num = -1;    
 
     /* Primary device */
     label = gtk_label_new(_("1. Device:"));
@@ -1245,6 +1295,9 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
             {
                 gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT
                                                (ctrl->DevSel), rigname);
+		if (!strcmp(rigname, lastrig1name)) {
+		  lastrig1num = i;
+		}
                 g_free(rigname);
             }
         }
@@ -1257,10 +1310,10 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
                     __FILE__, __LINE__, error->message);
         g_clear_error(&error);
     }
-
+    g_free(lastrig1name);
     g_dir_close(dir);
 
-    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel), 0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel), lastrig1num);
     g_signal_connect(ctrl->DevSel, "changed",
                      G_CALLBACK(primary_rig_selected_cb), ctrl);
     gtk_grid_attach(GTK_GRID(table), ctrl->DevSel, 1, 0, 1, 1);
@@ -1281,8 +1334,10 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
     gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel2), 0);
 
     dir = g_dir_open(dirname, 0, &error);
+    
     if (dir)
     {
+        gint i = 0;
         /* read each .rig file */
         while ((filename = g_dir_read_name(dir)))
         {
@@ -1294,7 +1349,14 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
                 {
                     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT
                                                    (ctrl->DevSel2), vbuff[0]);
+		    if (lastrig2name) {
+		      if (!strcmp(vbuff[0],lastrig2name)) {
+			// i + 1 since "None" is first option
+			lastrig2num = i + 1;
+		      }
+		    }
                 }
+		i++;
                 g_strfreev(vbuff);
             }
         }
@@ -1306,13 +1368,16 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
                     __FILE__, __LINE__, error->message);
         g_clear_error(&error);
     }
-
+    g_free(lastrig2name);
     g_free(dirname);
     g_dir_close(dir);
 
     g_signal_connect(ctrl->DevSel2, "changed",
                      G_CALLBACK(secondary_rig_selected_cb), ctrl);
     gtk_grid_attach(GTK_GRID(table), ctrl->DevSel2, 1, 1, 1, 1);
+    if (lastrig2num != -1 ) {
+      gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel2), lastrig2num);
+    }
 
     /* Engage button */
     ctrl->LockBut = gtk_toggle_button_new_with_label(_("Engage"));
