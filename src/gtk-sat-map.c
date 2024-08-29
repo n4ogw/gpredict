@@ -1805,6 +1805,7 @@ static void plot_sat(gpointer key, gpointer value, gpointer data)
         sat_log_log(SAT_LOG_LEVEL_ERROR,
                     _("%s: Cannot allocate memory for satellite %d."),
                     __func__, sat->tle.catnr);
+	g_free(catnum);
         return;
     }
 
@@ -2076,6 +2077,7 @@ static void update_sat(gpointer key, gpointer value, gpointer data)
     {
         free_sat_obj(NULL, obj, satmap);
         g_hash_table_remove(satmap->obj, catnum);
+	g_free(catnum);
         return;
     }
 
@@ -2083,6 +2085,7 @@ static void update_sat(gpointer key, gpointer value, gpointer data)
     {
         if (decayed(sat))
         {
+   	    g_free(catnum);
             return;
         }
         else
@@ -2090,6 +2093,7 @@ static void update_sat(gpointer key, gpointer value, gpointer data)
             /* satellite was decayed now is visible
                time controller backed up time */
             plot_sat(key, value, data);
+	    g_free(catnum);
             return;
         }
     }

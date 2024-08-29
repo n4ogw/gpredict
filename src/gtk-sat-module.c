@@ -485,6 +485,7 @@ static void gtk_sat_module_load_sats(GtkSatModule * module)
 
                 /* it is not needed in this case */
                 g_free(sat);
+		g_free(key);
             }
 
         }

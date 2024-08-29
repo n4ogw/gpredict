@@ -202,6 +202,10 @@ void mod_cfg_get_integer_list_boolean(GKeyFile * cfgdata,
             /* just add a one to the value so there is presence indicator */
             g_hash_table_insert(dest, tkey, NULL);
         }
+	else
+	{
+	  g_free(tkey);
+	}
     }
     g_free(sats);
 }
