@@ -34,8 +34,10 @@ typedef struct {
     gchar          *name;       /*!< The name of the transponder (same as config group) */
     gint64          uplow;      /*!< Lower limit of uplink. */
     gint64          uphigh;     /*!< Upper limit of uplink. */
+    gint64          upoffset;   /*!< Offset of uplink. */
     gint64          downlow;    /*!< Lower limit of downlink. */
-    gint64          downhigh;   /*!< Upper limit of donlink. */
+    gint64          downhigh;   /*!< Upper limit of downlink. */
+    gint64          downoffset; /*!< Offset of downlink. */
     gdouble         baud;       /*!< Baud rate > */
     gboolean        invert;     /*!< Flag indicating whether transponder is inverting. */
     gchar          *mode;       /*!< Mode descriptor. */
@@ -44,7 +46,9 @@ typedef struct {
 /* The actual data would then be a singly linked list with pointers to transponder_t structures */
 
 GSList         *read_transponders(guint catnum);
+void            read_offsets(guint catnum, GSList *trsplist);
 void            write_transponders(guint catnum, GSList * trsplist);
+void            write_offsets(guint catnum, GSList * trsp_list);
 void            free_transponders(GSList * trsplist);
 
 #endif

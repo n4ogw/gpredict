@@ -35,8 +35,6 @@ struct _gtk_rig_ctrl {
     GtkWidget      *RigFreqUp;
     GtkWidget      *SatDopDown; /*!< Doppler shift down */
     GtkWidget      *SatDopUp;   /*!< Doppler shift up */
-    GtkWidget      *LoDown;     /*!< LO of downconverter */
-    GtkWidget      *LoUp;       /*!z LO of upconverter */
 
     /* target status labels */
     GtkWidget      *SatAz, *SatEl, *SatCnt;
@@ -49,12 +47,16 @@ struct _gtk_rig_ctrl {
     GtkWidget      *DevSel2;    /*!< Second device selector */
     GtkWidget      *LockBut;
     GtkWidget      *cycle_spin;      /*!< Update timer cycle */
-
+    GtkWidget      *uplink_offset_spin;     /*! < Uplink Offset */
+    GtkWidget      *downlink_offset_spin;   /*! < Downlink Offset */
+    gulong              handler_id_downoffset;
+    gulong              handler_id_upoffset;
+  
     radio_conf_t   *conf;       /*!< Radio configuration */
     radio_conf_t   *conf2;      /*!< Secondary radio configuration */
     GSList         *trsplist;   /*!< List of available transponders */
     trsp_t         *trsp;       /*!< Pointer to the current transponder configuration */
-    gboolean        trsplock;   /*!< Flag indicating whether uplink and downlink are lockled */
+    gboolean        trsplock;   /*!< Flag indicating whether uplink and downlink are locked */
 
     GSList         *sats;       /*!< List of sats in parent module */
     sat_t          *target;     /*!< Target satellite */
@@ -77,7 +79,6 @@ struct _gtk_rig_ctrl {
     gdouble         lastrxf;    /*!< Last frequency sent to receiver. */
     gdouble         lasttxf;    /*!< Last frequency sent to tranmitter. */
     gdouble         du, dd;     /*!< Last computed up/down Doppler shift; computed in update() */
-
     gint64          last_toggle_tx;     /*!< Last time when exec_toggle_tx_cycle() was executed (seconds)
                                            -1 indicates that an update should be performed ASAP */
 

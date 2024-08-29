@@ -40,6 +40,8 @@
 #define KEY_INVERT      "INVERT"
 #define KEY_MODE        "MODE"
 #define KEY_BAUD        "BAUD"
+#define KEY_UP_OFFSET   "UP_OFFSET"
+#define KEY_DOWN_OFFSET "DOWN_OFFSET"
 
 static void check_trsp_freq(trsp_t * trsp)
 {
@@ -95,7 +97,8 @@ GSList *read_transponders(guint catnum)
         g_clear_error(&error);
 
         g_key_file_free(cfg);
-
+	g_free(name);
+	g_free(fname);
         return NULL;
     }
 
@@ -199,7 +202,88 @@ GSList *read_transponders(guint catnum)
     g_free(name);
     g_free(fname);
 
+    read_offsets(catnum, trsplist);
+    
     return trsplist;
+}
+
+/**
+ * Read transponder offset data file.
+ * 
+ * @param catnum The catalog number of the satellite to read transponders for.
+ * @return  The new transponder list.
+ */
+void read_offsets(guint catnum, GSList *trsplist)
+{
+    trsp_t         *trsp;
+    GKeyFile       *cfg = NULL;
+    GError         *error = NULL;
+    gchar          *name, *fname;
+    gchar         **groups;
+    gsize           numgrp, i;
+    guint           n;
+
+    n = g_slist_length(trsplist);
+
+    for (i = 0; i < n; i++)
+      {
+        trsp = (trsp_t *) g_slist_nth_data(trsplist, i);
+	trsp->upoffset = 0;
+	trsp->downoffset = 0;
+      }
+
+    name = g_strdup_printf("%d.offset", catnum);
+    fname = trsp_file_name(name);
+
+    cfg = g_key_file_new();
+    if (!g_key_file_load_from_file
+        (cfg, fname, G_KEY_FILE_KEEP_COMMENTS, &error))
+    {
+        /* file doesn't exist, just ignore */
+        g_free(name);
+        g_free(fname);
+	g_key_file_free(cfg);
+	return;
+    }
+
+    /* get list of transponders */
+    groups = g_key_file_get_groups(cfg, &numgrp);
+
+    /* load each transponder */
+    if (numgrp == 0)
+    {
+        sat_log_log(SAT_LOG_LEVEL_ERROR, _("%s: %s contains 0 offsets"),
+                    __func__, fname);
+
+        goto done;
+    }
+
+    for (i = 0; i < numgrp; i++)
+    {
+        trsp = (trsp_t *) g_slist_nth_data(trsplist, i);
+        trsp->upoffset = g_key_file_get_int64(cfg, groups[i], KEY_UP_OFFSET, &error);
+	if (error != NULL)
+	  {
+            sat_log_log(SAT_LOG_LEVEL_INFO, INFO_MSG, __func__, KEY_UP_OFFSET,
+                        name, groups[i]);
+            g_clear_error(&error);
+	  }
+        trsp->downoffset = g_key_file_get_int64(cfg, groups[i], KEY_DOWN_OFFSET, &error);
+	if (error != NULL)
+	  {
+            sat_log_log(SAT_LOG_LEVEL_INFO, INFO_MSG, __func__, KEY_DOWN_OFFSET,
+                        name, groups[i]);
+            g_clear_error(&error);
+	  }
+    }
+
+  done:
+    g_strfreev(groups);
+    g_key_file_free(cfg);
+    g_free(name);
+    g_free(fname);
+
+    
 }
 
 /**
@@ -265,7 +349,7 @@ void write_transponders(guint catnum, GSList * trsp_list)
     else
     {
         sat_log_log(SAT_LOG_LEVEL_INFO,
-                    _("Wrote %d transmponders to %s"),
+                    _("Wrote %d transponders to %s"),
                     trsp_written, trsp_file_name);
     }
 
@@ -273,6 +357,64 @@ void write_transponders(guint catnum, GSList * trsp_list)
     g_free(file_name);
     g_free(trsp_file);
 }
+
+/**
+ * Write transponder offset list to file.
+ *
+ * @param catnum The catalog number of the satellite.
+ * @param trsplist Pointer to a GSList of trsp_t structures.
+ *
+ * The transponder offset list is written to a file called "catnum.offset". If the file
+ * already exists, its contents will be deleted.
+ */
+void write_offsets(guint catnum, GSList * trsp_list)
+{
+    trsp_t         *trsp;
+    GKeyFile   *trsp_data = NULL;
+    gchar          *file_name;
+    gchar          *trsp_file;
+    gint            i, n, trsp_written;
+
+    file_name = g_strdup_printf("%d.offset", catnum);
+    trsp_file = trsp_file_name(file_name);
+    trsp_data = g_key_file_new();
+    trsp_written = 0;
+    n = g_slist_length(trsp_list);
+    for (i = 0; i < n; i++)
+    {
+        trsp = (trsp_t *) g_slist_nth_data(trsp_list, i);
+        if (!trsp->name)
+        {
+            sat_log_log(SAT_LOG_LEVEL_ERROR,
+                        _("%s: Skipping transponder offset at index %d (no name)"),
+                        __func__, i);
+            continue;
+        }
+
+	g_key_file_set_int64(trsp_data, trsp->name, KEY_UP_OFFSET,
+                                 trsp->upoffset);
+	g_key_file_set_int64(trsp_data, trsp->name, KEY_DOWN_OFFSET,
+                                 trsp->downoffset);
+    }
+
+    if (gpredict_save_key_file(trsp_data, trsp_file))
+    {
+        sat_log_log(SAT_LOG_LEVEL_ERROR,
+                    _("%s: Error writing transponder offset data to %s"),
+                    __func__, file_name);
+    }
+    else
+    {
+        sat_log_log(SAT_LOG_LEVEL_INFO,
+                    _("Wrote %d transponder offsets to %s"),
+                    trsp_written, trsp_file_name(file_name));
+    }
+
+    g_key_file_free(trsp_data);
+    g_free(file_name);
+    g_free(trsp_file);
+}
+
 
 /**
  * Free transponder list.

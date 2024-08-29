@@ -223,6 +223,10 @@ void trsp_update_files(gchar * input_file)
                             g_hash_table_insert(modes_hash, key, nmode);
 
                         }
+			else
+			{
+			    g_free(key);
+			}    
 
                         sat_log_log(SAT_LOG_LEVEL_INFO, _("MODE %d %s"),
                                     m_modes.id, m_modes.name);
@@ -342,6 +346,7 @@ void trsp_update_files(gchar * input_file)
                             //TODO: increase number of transponders here
                             //ntrsp->numtrsp += 1; //number of transponder info in this file
                             //g_hash_table_replace(trsp_hash, key, ntrsp);
+			    g_free(key);
                         }
 
                         //now lets write the new version

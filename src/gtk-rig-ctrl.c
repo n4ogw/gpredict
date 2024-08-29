@@ -112,6 +112,7 @@ static void gtk_rig_ctrl_destroy(GtkWidget * widget)
         ctrl->rigctl_thread = NULL;
     }
 
+  
     if (ctrl->conf != NULL)
     {
         radio_conf_save(ctrl->conf);
@@ -177,6 +178,8 @@ static void gtk_rig_ctrl_init(GtkRigCtrl * ctrl,
     ctrl->lastrxf = 0.0;
     ctrl->lasttxf = 0.0;
     ctrl->last_toggle_tx = -1;
+    ctrl->handler_id_upoffset = 0;
+    ctrl->handler_id_downoffset = 0;
 }
 
 GType gtk_rig_ctrl_get_type()
@@ -433,6 +436,28 @@ static void uplink_changed_cb(GtkFreqKnob * knob, gpointer data)
         track_uplink(ctrl);
 }
 
+/* Called when the user changes the value of the downlink offset */
+static void downlink_offset_changed_cb(GtkSpinButton * spin, gpointer data)
+{
+    GtkRigCtrl     *ctrl = GTK_RIG_CTRL(data);
+
+    if (ctrl->trsp) {
+      ctrl->trsp->downoffset = (gint64) gtk_spin_button_get_value(spin);
+      write_offsets(ctrl->target->tle.catnr, ctrl->trsplist);
+    }
+}
+
+/* Called when the user changes the value of the uplink offset */
+static void uplink_offset_changed_cb(GtkSpinButton * spin, gpointer data)
+{
+    GtkRigCtrl     *ctrl = GTK_RIG_CTRL(data);
+
+    if (ctrl->trsp) {
+      ctrl->trsp->upoffset = (gint64) gtk_spin_button_get_value(spin);
+      write_offsets(ctrl->target->tle.catnr, ctrl->trsplist);
+    }
+}
+
 /*
  * Create freq control widgets for downlink.
  *
@@ -477,13 +502,22 @@ static GtkWidget *create_downlink_widgets(GtkRigCtrl * ctrl)
     g_object_set(ctrl->SatDopDown, "xalign", 0.0f, "yalign", 0.5f, NULL);
     gtk_box_pack_start(GTK_BOX(hbox1), ctrl->SatDopDown, FALSE, TRUE, 0);
 
-    /* Downconverter LO */
-    ctrl->LoDown = gtk_label_new("0 MHz");
-    g_object_set(ctrl->LoDown, "xalign", 1.0f, "yalign", 0.5f, NULL);
-    gtk_box_pack_end(GTK_BOX(hbox1), ctrl->LoDown, FALSE, FALSE, 2);
-    label = gtk_label_new(_("LO:"));
+    /* offset */
+    label = gtk_label_new(_(" Hz"));
+     g_object_set(label, "xalign", 1.0f, "yalign", 0.5f, NULL);
+    gtk_box_pack_end(GTK_BOX(hbox1), label, FALSE, FALSE, 0);
+    ctrl->downlink_offset_spin = gtk_spin_button_new_with_range(-10000, 10000, 1);
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(ctrl->downlink_offset_spin), 0);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->downlink_offset_spin),0);
+    gtk_box_pack_end(GTK_BOX(hbox1), ctrl->downlink_offset_spin, FALSE, TRUE, 0);
+    label = gtk_label_new(_("Offset:"));
     g_object_set(label, "xalign", 1.0f, "yalign", 0.5f, NULL);
     gtk_box_pack_end(GTK_BOX(hbox1), label, FALSE, FALSE, 0);
+    gtk_widget_set_tooltip_text(ctrl->downlink_offset_spin,
+                                _("This parameter controls the offset in "
+                                  "the downlink frequency."));
+    ctrl->handler_id_downoffset = g_signal_connect(ctrl->downlink_offset_spin, "value-changed",
+		     G_CALLBACK(downlink_offset_changed_cb), ctrl);
 
     /* Radio downlink frequency */
     label = gtk_label_new(NULL);
@@ -544,14 +578,23 @@ static GtkWidget *create_uplink_widgets(GtkRigCtrl * ctrl)
     g_object_set(ctrl->SatDopUp, "xalign", 0.0f, "yalign", 0.5f, NULL);
     gtk_box_pack_start(GTK_BOX(hbox1), ctrl->SatDopUp, FALSE, TRUE, 0);
 
-    /* Upconverter LO */
-    ctrl->LoUp = gtk_label_new("0 MHz");
-    g_object_set(ctrl->LoUp, "xalign", 1.0f, "yalign", 0.5f, NULL);
-    gtk_box_pack_end(GTK_BOX(hbox1), ctrl->LoUp, FALSE, FALSE, 2);
-    label = gtk_label_new(_("LO:"));
+    /* offset */
+    label = gtk_label_new(_(" Hz"));
     g_object_set(label, "xalign", 1.0f, "yalign", 0.5f, NULL);
     gtk_box_pack_end(GTK_BOX(hbox1), label, FALSE, FALSE, 0);
-
+    ctrl->uplink_offset_spin = gtk_spin_button_new_with_range(-10000, 10000, 1);
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(ctrl->uplink_offset_spin), 0);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->uplink_offset_spin),0);
+    gtk_box_pack_end(GTK_BOX(hbox1), ctrl->uplink_offset_spin, FALSE, TRUE, 0);
+    label = gtk_label_new(_("Offset:"));
+    g_object_set(label, "xalign", 1.0f, "yalign", 0.5f, NULL);
+    gtk_box_pack_end(GTK_BOX(hbox1), label, FALSE, FALSE, 0);
+    gtk_widget_set_tooltip_text(ctrl->uplink_offset_spin,
+                                _("This parameter controls the offset in "
+                                  "the uplink frequency."));
+    ctrl->handler_id_upoffset =g_signal_connect(ctrl->uplink_offset_spin, "value-changed",
+		     G_CALLBACK(uplink_offset_changed_cb), ctrl);
+    
     /* Radio uplink frequency */
     label = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(label),
@@ -672,7 +715,7 @@ static void sat_selected_cb(GtkComboBox * satsel, gpointer data)
         ctrl->pass = get_next_pass(ctrl->target, ctrl->qth, 3.0);
 
 	sat_cfg_set_str(SAT_CFG_STR_LAST_SAT, ctrl->target->nickname);
-
+	
         /* read transponders for new target */
         load_trsp_list(ctrl);
     }
@@ -760,6 +803,14 @@ static void trsp_selected_cb(GtkComboBox * box, gpointer data)
         ctrl->trsp = (trsp_t *) g_slist_nth_data(ctrl->trsplist, i);
         trsp_tune_cb(NULL, data);
 	sat_cfg_set_int(SAT_CFG_INT_LAST_TRSP, i);
+	
+	g_signal_handler_block(GTK_SPIN_BUTTON(ctrl->downlink_offset_spin),ctrl->handler_id_downoffset);
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->downlink_offset_spin),ctrl->trsp->downoffset);
+	g_signal_handler_unblock(GTK_SPIN_BUTTON(ctrl->downlink_offset_spin),ctrl->handler_id_downoffset);
+
+	g_signal_handler_block(GTK_SPIN_BUTTON(ctrl->uplink_offset_spin),ctrl->handler_id_upoffset);
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->uplink_offset_spin),ctrl->trsp->upoffset);
+	g_signal_handler_unblock(GTK_SPIN_BUTTON(ctrl->uplink_offset_spin),ctrl->handler_id_upoffset);
     }
     else
     {
@@ -819,7 +870,6 @@ static void delay_changed_cb(GtkSpinButton * spin, gpointer data)
 static void primary_rig_selected_cb(GtkComboBox * box, gpointer data)
 {
     GtkRigCtrl     *ctrl = GTK_RIG_CTRL(data);
-    gchar          *buff;
 
     sat_log_log(SAT_LOG_LEVEL_DEBUG,
                 _("%s:%s: Primary device selected: %d"),
@@ -852,18 +902,6 @@ static void primary_rig_selected_cb(GtkComboBox * box, gpointer data)
 
         gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->cycle_spin),
                                   ctrl->conf->cycle);
-
-        /* update LO widgets */
-        buff = g_strdup_printf(_("%.0f MHz"), ctrl->conf->lo / 1.0e6);
-        gtk_label_set_text(GTK_LABEL(ctrl->LoDown), buff);
-        g_free(buff);
-        /* uplink LO only if single device */
-        if (ctrl->conf2 == NULL)
-        {
-            buff = g_strdup_printf(_("%.0f MHz"), ctrl->conf->loup / 1.0e6);
-            gtk_label_set_text(GTK_LABEL(ctrl->LoUp), buff);
-            g_free(buff);
-        }
     }
     else
     {
@@ -883,7 +921,7 @@ static void primary_rig_selected_cb(GtkComboBox * box, gpointer data)
 static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
 {
     GtkRigCtrl     *ctrl = GTK_RIG_CTRL(data);
-    gchar          *buff;
+    //    gchar          *buff;
     gchar          *name1, *name2;
 
 
@@ -902,16 +940,7 @@ static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
     if (gtk_combo_box_get_active(box) == 0)
     {
         /* first entry is "None" */
-        sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO2, NULL);
-      
-        /* reset uplink LO to what's in ctrl->conf */
-        if (ctrl->conf != NULL)
-        {
-            buff = g_strdup_printf(_("%.0f MHz"), ctrl->conf->loup / 1.0e6);
-            gtk_label_set_text(GTK_LABEL(ctrl->LoUp), buff);
-            g_free(buff);
-        }
-
+	sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO2, NULL);
         return;
     }
 
@@ -925,12 +954,6 @@ static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
         /* selected conf is the same as the primary one */
         g_free(name1);
         g_free(name2);
-        if (ctrl->conf != NULL)
-        {
-            buff = g_strdup_printf(_("%.0f MHz"), ctrl->conf->loup / 1.0e6);
-            gtk_label_set_text(GTK_LABEL(ctrl->LoUp), buff);
-            g_free(buff);
-        }
         gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel2), 0);
 	sat_cfg_set_str(SAT_CFG_STR_LAST_RADIO2, NULL);
         return;
@@ -958,10 +981,6 @@ static void secondary_rig_selected_cb(GtkComboBox * box, gpointer data)
         sat_log_log(SAT_LOG_LEVEL_INFO,
                     _("%s:%s: Loaded new radio configuration %s"),
                     __FILE__, __func__, ctrl->conf2->name);
-
-        buff = g_strdup_printf(_("%.0f MHz"), ctrl->conf2->loup / 1.0e6);
-        gtk_label_set_text(GTK_LABEL(ctrl->LoUp), buff);
-        g_free(buff);
     }
     else
     {
@@ -1056,7 +1075,7 @@ static GtkWidget *create_target_widgets(GtkRigCtrl * ctrl)
     }
     g_free(lastSat);
     gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->SatSel), lastSatNum);
-    
+
     gtk_widget_set_tooltip_text(ctrl->SatSel, _("Select target object"));
     g_signal_connect(ctrl->SatSel, "changed", G_CALLBACK(sat_selected_cb),
                      ctrl);
@@ -1088,11 +1107,14 @@ static GtkWidget *create_target_widgets(GtkRigCtrl * ctrl)
 
 	if (lastTrsp < nTrsp) {
 	  gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->TrspSel), lastTrsp);
+	  gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->downlink_offset_spin),(gdouble)ctrl->trsp->downoffset);
+	  gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->uplink_offset_spin),(gdouble)ctrl->trsp->upoffset);
 	}
       }
     else
       {
-
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->downlink_offset_spin),0);
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(ctrl->uplink_offset_spin),0);
       }
     
 
@@ -1252,8 +1274,8 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
     lastrig1name = sat_cfg_get_str(SAT_CFG_STR_LAST_RADIO1);
     lastrig1num = 0;
     lastrig2name = sat_cfg_get_str(SAT_CFG_STR_LAST_RADIO2);
-    lastrig2num = -1;    
-
+    lastrig2num = -1;
+    
     /* Primary device */
     label = gtk_label_new(_("1. Device:"));
     g_object_set(label, "xalign", 1.0f, "yalign", 0.5f, NULL);
@@ -1327,14 +1349,13 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
     gtk_widget_set_tooltip_text(ctrl->DevSel2,
                                 _("Select secondary radio device\n"
                                   "This device will be used for uplink"));
-
     /* load config */
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ctrl->DevSel2),
                                    _("None"));
     gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel2), 0);
 
     dir = g_dir_open(dirname, 0, &error);
-    
+
     if (dir)
     {
         gint i = 0;
@@ -1378,7 +1399,7 @@ static GtkWidget *create_conf_widgets(GtkRigCtrl * ctrl)
     if (lastrig2num != -1 ) {
       gtk_combo_box_set_active(GTK_COMBO_BOX(ctrl->DevSel2), lastrig2num);
     }
-
+    
     /* Engage button */
     ctrl->LockBut = gtk_toggle_button_new_with_label(_("Engage"));
     gtk_widget_set_tooltip_text(ctrl->LockBut,
@@ -1700,11 +1721,25 @@ static void exec_rx_cycle(GtkRigCtrl * ctrl)
             /* doppler shift; only if we are tracking */
             if (ctrl->tracking)
             {
-                satfreqd = (readfreq - ctrl->dd + ctrl->conf->lo);
+	      if (ctrl->trsp)
+		{
+                satfreqd = (readfreq - ctrl->dd + ctrl->conf->lo) - ctrl->trsp->downoffset;
+		}
+	      else
+		{
+		  satfreqd = (readfreq - ctrl->dd + ctrl->conf->lo);
+		}
             }
             else
             {
-                satfreqd = readfreq + ctrl->conf->lo;
+	      if (ctrl->trsp)
+		{
+		  satfreqd = readfreq + ctrl->conf->lo - ctrl->trsp->downoffset;
+		}
+	      else
+		{
+		  satfreqd = readfreq + ctrl->conf->lo;
+		}
             }
             gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->SatFreqDown),
                                     satfreqd);
@@ -1718,8 +1753,7 @@ static void exec_rx_cycle(GtkRigCtrl * ctrl)
             /* no need to forward track */
             return;
         }
-    }
-
+    } 
     /* now, forward tracking */
 
     /* If we are tracking, calculate the radio freq by applying both dopper shift
@@ -1729,19 +1763,37 @@ static void exec_rx_cycle(GtkRigCtrl * ctrl)
     satfrequ = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->SatFreqUp));
     if (ctrl->tracking)
     {
-        /* downlink */
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                satfreqd + ctrl->dd - ctrl->conf->lo);
-        /* uplink */
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                satfrequ + ctrl->du - ctrl->conf->loup);
+        if (ctrl->trsp)
+	  {
+	    gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				    satfreqd + ctrl->dd - ctrl->conf->lo + ctrl->trsp->downoffset);
+	    gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				    satfrequ + ctrl->du - ctrl->conf->loup + ctrl->trsp->upoffset);
+	  }
+	else
+	  {
+	    gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				    satfreqd + ctrl->dd - ctrl->conf->lo);
+	    gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				    satfrequ + ctrl->du - ctrl->conf->loup);
+	  }
     }
     else
     {
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                satfreqd - ctrl->conf->lo);
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                satfrequ - ctrl->conf->loup);
+      if (ctrl->trsp)
+	{
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd - ctrl->conf->lo + ctrl->trsp->downoffset);
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ - ctrl->conf->loup + ctrl->trsp->upoffset);
+	}
+      else
+	{
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd - ctrl->conf->lo);
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ - ctrl->conf->loup);
+	}
     }
 
     tmpfreq = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->RigFreqDown));
@@ -1782,7 +1834,7 @@ static void exec_rx_cycle(GtkRigCtrl * ctrl)
             ctrl->errcnt++;
         }
     }
-
+    
     /* Remember PTT state, to avoid misinterpreting VFO changes as dial
        feedback during TX to RX transitions.
      */
@@ -1824,11 +1876,25 @@ static void exec_tx_cycle(GtkRigCtrl * ctrl)
             /* doppler shift; only if we are tracking */
             if (ctrl->tracking)
             {
-                satfrequ = readfreq - ctrl->du + ctrl->conf->loup;
+	      if (ctrl->trsp)
+		{
+		  satfrequ = readfreq - ctrl->du + ctrl->conf->loup - ctrl->trsp->upoffset;
+		}
+	      else
+		{
+		  satfrequ = readfreq - ctrl->du + ctrl->conf->loup;
+		}
             }
             else
             {
-                satfrequ = readfreq + ctrl->conf->loup;
+	      if (ctrl->trsp)
+		{
+		  satfrequ = readfreq + ctrl->conf->loup - ctrl->trsp->upoffset;
+		}
+	      else
+		{
+		  satfrequ = readfreq + ctrl->conf->loup;
+		}
             }
             gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->SatFreqUp), satfrequ);
 
@@ -1852,19 +1918,41 @@ static void exec_tx_cycle(GtkRigCtrl * ctrl)
     satfrequ = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->SatFreqUp));
     if (ctrl->tracking)
     {
+      if (ctrl->trsp)
+	{
         /* downlink */
         gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                satfreqd + ctrl->dd - ctrl->conf->lo);
+                                satfreqd + ctrl->dd - ctrl->conf->lo + ctrl->trsp->downoffset);
         /* uplink */
         gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                satfrequ + ctrl->du - ctrl->conf->loup);
+                                satfrequ + ctrl->du - ctrl->conf->loup + ctrl->trsp->upoffset);
+	}
+      else
+	{
+	  /* downlink */
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd + ctrl->dd - ctrl->conf->lo);
+	  /* uplink */
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ + ctrl->du - ctrl->conf->loup);
+	}
     }
     else
     {
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                satfreqd - ctrl->conf->lo);
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                satfrequ - ctrl->conf->loup);
+      if (ctrl->trsp)
+	{
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd - ctrl->conf->lo + ctrl->trsp->downoffset);
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ - ctrl->conf->loup + ctrl->trsp->upoffset);
+	}
+      else
+	{
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd - ctrl->conf->lo);
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ - ctrl->conf->loup);
+	}
     }
 
     tmpfreq = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->RigFreqUp));
@@ -2034,11 +2122,25 @@ static void exec_duplex_tx_cycle(GtkRigCtrl * ctrl)
             /* doppler shift; only if we are tracking */
             if (ctrl->tracking)
             {
-                satfrequ = readfreq - ctrl->du + ctrl->conf->loup;
+	      if (ctrl->trsp)
+		{
+		  satfrequ = readfreq - ctrl->du + ctrl->conf->loup - ctrl->trsp->upoffset;
+		}
+	      else
+		{
+		  satfrequ = readfreq - ctrl->du + ctrl->conf->loup;
+		}
             }
             else
             {
-                satfrequ = readfreq + ctrl->conf->loup;
+	      if (ctrl->trsp)
+		{
+		  satfrequ = readfreq + ctrl->conf->loup - ctrl->trsp->upoffset;
+		}
+	      else
+		{
+		  satfrequ = readfreq + ctrl->conf->loup;
+		}
             }
             gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->SatFreqUp), satfrequ);
 
@@ -2064,19 +2166,41 @@ static void exec_duplex_tx_cycle(GtkRigCtrl * ctrl)
     satfrequ = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->SatFreqUp));
     if (ctrl->tracking)
     {
-        /* downlink */
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                satfreqd + ctrl->dd - ctrl->conf->lo);
-        /* uplink */
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                satfrequ + ctrl->du - ctrl->conf->loup);
+      if (ctrl->trsp)
+	{
+	  /* downlink */
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd + ctrl->dd - ctrl->conf->lo + ctrl->trsp->downoffset);
+	  /* uplink */
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ + ctrl->du - ctrl->conf->loup + ctrl->trsp->upoffset);
+	}
+      else
+	{
+	  /* downlink */
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd + ctrl->dd - ctrl->conf->lo);
+	  /* uplink */
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ + ctrl->du - ctrl->conf->loup);
+	}
     }
     else
     {
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                satfreqd - ctrl->conf->lo);
-        gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                satfrequ - ctrl->conf->loup);
+      if (ctrl->trsp)
+	{
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd - ctrl->conf->lo + ctrl->trsp->downoffset);
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ - ctrl->conf->loup + ctrl->trsp->upoffset);
+	}
+      else
+	{
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+				  satfreqd - ctrl->conf->lo);
+	  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				  satfrequ - ctrl->conf->loup);
+	}
     }
 
     tmpfreq = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->RigFreqUp));
@@ -2140,11 +2264,11 @@ static void exec_dual_rig_cycle(GtkRigCtrl * ctrl)
             /* doppler shift; only if we are tracking */
             if (ctrl->tracking)
             {
-                satfreqd = readfreq - ctrl->dd + ctrl->conf->lo;
+	      satfreqd = readfreq - ctrl->dd + ctrl->conf->lo - ctrl->trsp->downoffset; 
             }
             else
             {
-                satfreqd = readfreq + ctrl->conf->lo;
+	      satfreqd = readfreq + ctrl->conf->lo - ctrl->trsp->downoffset;
             }
             gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->SatFreqDown),
                                     satfreqd);
@@ -2163,13 +2287,29 @@ static void exec_dual_rig_cycle(GtkRigCtrl * ctrl)
         satfrequ = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->SatFreqUp));
         if (ctrl->tracking)
         {
-            gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                    satfrequ + ctrl->du - ctrl->conf2->loup);
+	  if (ctrl->trsp)
+	    {
+	      gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				      satfrequ + ctrl->du - ctrl->conf2->loup + ctrl->trsp->upoffset);
+	    }
+	  else
+	    {
+	      gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				      satfrequ + ctrl->du - ctrl->conf2->loup);
+	    }
         }
         else
         {
-            gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                    satfrequ - ctrl->conf2->loup);
+	  if (ctrl->trsp)
+	    {
+	      gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				      satfrequ - ctrl->conf2->loup + ctrl->trsp->upoffset);
+	    }
+	  else
+	    {
+	      gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+				      satfrequ - ctrl->conf2->loup);
+	    }
         }
 
         tmpfreq = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->RigFreqUp));
@@ -2204,12 +2344,12 @@ static void exec_dual_rig_cycle(GtkRigCtrl * ctrl)
         {
             /* downlink */
             gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                    satfreqd + ctrl->dd - ctrl->conf->lo);
+                                    satfreqd + ctrl->dd - ctrl->conf->lo + ctrl->trsp->downoffset);
         }
         else
         {
             gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                    satfreqd - ctrl->conf->lo);
+                                    satfreqd - ctrl->conf->lo + ctrl->trsp->downoffset);
         }
 
         tmpfreq = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->RigFreqDown));
@@ -2258,11 +2398,25 @@ static void exec_dual_rig_cycle(GtkRigCtrl * ctrl)
                 /* doppler shift; only if we are tracking */
                 if (ctrl->tracking)
                 {
-                    satfrequ = readfreq - ctrl->du + ctrl->conf2->loup;
+		  if (ctrl->trsp)
+		    {
+		      satfrequ = readfreq - ctrl->du + ctrl->conf2->loup - ctrl->trsp->upoffset;
+		    }
+		  else
+		    {
+		      satfrequ = readfreq - ctrl->du + ctrl->conf2->loup;
+		    }
                 }
                 else
                 {
-                    satfrequ = readfreq + ctrl->conf2->loup;
+		  if (ctrl->trsp)
+		    {
+		      satfrequ = readfreq + ctrl->conf2->loup - ctrl->trsp->upoffset;
+		    }
+		  else
+		    {
+		      satfrequ = readfreq + ctrl->conf2->loup;
+		    }
                 }
                 gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->SatFreqUp),
                                         satfrequ);
@@ -2282,13 +2436,29 @@ static void exec_dual_rig_cycle(GtkRigCtrl * ctrl)
                 gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->SatFreqDown));
             if (ctrl->tracking)
             {
-                gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                        satfreqd + ctrl->dd - ctrl->conf->lo);
+	      if (ctrl->trsp)
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+					  satfreqd + ctrl->dd - ctrl->conf->lo + ctrl->trsp->downoffset);
+		}
+	      else
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+					  satfreqd + ctrl->dd - ctrl->conf->lo);
+		}
             }
             else
             {
-                gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
-                                        satfreqd - ctrl->conf->lo);
+	      if (ctrl->trsp)
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+					  satfreqd - ctrl->conf->lo + ctrl->trsp->downoffset);
+		}
+	      else
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqDown),
+					  satfreqd - ctrl->conf->lo);
+		}
             }
 
             tmpfreq =
@@ -2321,14 +2491,31 @@ static void exec_dual_rig_cycle(GtkRigCtrl * ctrl)
             satfrequ = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->SatFreqUp));
             if (ctrl->tracking)
             {
-                gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                        satfrequ + ctrl->du -
-                                        ctrl->conf2->loup);
+	      if (ctrl->trsp)
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+					  satfrequ + ctrl->du -
+					  ctrl->conf2->loup + ctrl->trsp->upoffset);
+		}
+	      else
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+					  satfrequ + ctrl->du -
+					  ctrl->conf2->loup);
+		}
             }
             else
             {
-                gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
-                                        satfrequ - ctrl->conf2->loup);
+	      if (ctrl->trsp)
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+					  satfrequ - ctrl->conf2->loup +  ctrl->trsp->upoffset);
+		}
+	      else
+		{
+		  gtk_freq_knob_set_value(GTK_FREQ_KNOB(ctrl->RigFreqUp),
+					  satfrequ - ctrl->conf2->loup);
+		}
             }
 
             tmpfreq = gtk_freq_knob_get_value(GTK_FREQ_KNOB(ctrl->RigFreqUp));
@@ -2516,7 +2703,6 @@ static gboolean set_freq_toggle(GtkRigCtrl * ctrl, gint sock, gdouble freq)
     gboolean        retcode;
 
     /* send command */
-    printf("set_freq_toggle %d\n", ctrl->conf->vfo_opt);
     if (ctrl->conf->vfo_opt)
         buff = g_strdup_printf("I VFOA %10.0f\x0a", freq);
     else
@@ -3159,9 +3345,7 @@ GtkWidget      *gtk_rig_ctrl_new(GtkSatModule * module)
     gtk_grid_attach(GTK_GRID(table), create_conf_widgets(rigctrl), 1, 1, 1, 1);
     gtk_grid_attach(GTK_GRID(table), create_count_down_widgets(rigctrl),
                     0, 2, 2, 1);
-
     gtk_container_add(GTK_CONTAINER(rigctrl), table);
-
     if (module->target > 0)
         gtk_rig_ctrl_select_sat(rigctrl, module->target);
 
